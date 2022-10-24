@@ -36,9 +36,8 @@ near dev-deploy --wasmFile target/wasm32-unknown-unknown/release/antioquia_escro
 near deploy --wasmFile out/example.wasm --accountId example-contract.testnet --initFunction new --initArgs '{"owner_id": "example-contract.testnet", "total_supply": "10000000"}'
 ```
 
-alternatively, build and deployt it by the scripts
-```
-./build.sh
+alternatively, build and deployt it by script
+```bash
 ./deploy.sh
 ```
 

@@ -185,14 +185,24 @@ impl Escrow {
                 //send funds to the beneficiary
                 let p1 = Promise::new(escrow_item.beneficiary_id.clone()).transfer(amount_for_beneficiary);
                 escrow_item.current_amount -= amount_for_beneficiary;
-                log!("releasing '{}' to beneficiary '{}'; escrow_id '{}'", amount_for_beneficiary, escrow_item.beneficiary_id, escrow_id);
+                log!(
+                    "releasing '{}' to beneficiary '{}'; escrow_id '{}'",
+                    amount_for_beneficiary,
+                    escrow_item.beneficiary_id,
+                    escrow_id
+                );
 
                 //send the fees to the owner
                 let p2 = Promise::new(self.owner_id.clone()).transfer(amount_for_owner);
                 p1.then(p2);
                 //FIXME verify that _p1 has returned successfully
                 escrow_item.current_amount -= amount_for_owner;
-                log!("sending commission of '{}' to owner_id '{}'; escrow_id '{}'", amount_for_owner, self.owner_id, escrow_id);
+                log!(
+                    "sending commission of '{}' to owner_id '{}'; escrow_id '{}'",
+                    amount_for_owner,
+                    self.owner_id,
+                    escrow_id
+                );
 
                 escrow_item.status = Status::PayedOff;
             }
@@ -275,6 +285,17 @@ impl Escrow {
             None => {
                 log!("escrow_id '{}' not found", escrow_id)
             }
+        }
+    }
+
+    /// returns EscrowItem by its Id
+    pub fn get_balance(&self, escrow_id: EscrowId) -> Option<Balance> {
+        match self.items.get(&escrow_id) {
+            Some(item) => {
+                require!(item.agreed_amount == item.current_amount);
+                Some(item.agreed_amount)
+            }
+            None => None,
         }
     }
 }
