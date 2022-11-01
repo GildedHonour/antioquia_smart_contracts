@@ -16,8 +16,8 @@ pub enum Status {
 pub struct EscrowItem {
     pub escrow_id: EscrowId,
     pub status: Status,
-    pub funder_id: AccountId,
-    pub beneficiary_id: AccountId,
+    pub funder_account_id: AccountId,
+    pub beneficiary_account_id: AccountId,
     pub agreed_amount: Balance,
     pub current_fee_percentage: u128,
     pub current_amount: Balance,
@@ -101,8 +101,8 @@ impl Escrow {
     pub fn new(
         &mut self,
         escrow_id: EscrowId,
-        funder_id: AccountId,
-        beneficiary_id: AccountId,
+        funder_account_id: AccountId,
+        beneficiary_account_id: AccountId,
         agreed_amount: Balance,
         current_fee_percentage: Option<u128>,
     ) -> Option<EscrowId> {
@@ -121,7 +121,7 @@ impl Escrow {
             )
         );
 
-        let cond = (self.owner_id == env::predecessor_account_id()) || (funder_id == env::predecessor_account_id());
+        let cond = (self.owner_id == env::predecessor_account_id()) || (funder_account_id == env::predecessor_account_id());
         require!(cond, "only funder or owner of this escrow may call this method");
 
         //FIXME:
@@ -134,8 +134,8 @@ impl Escrow {
                 agreed_amount,
                 current_amount: agreed_amount,
                 status: Status::Active,
-                funder_id,
-                beneficiary_id,
+                funder_account_id,
+                beneficiary_account_id,
                 current_fee_percentage: current_fee_percentage.unwrap_or(self.base_fee_percentage),
             };
 
@@ -159,7 +159,7 @@ impl Escrow {
             Some(mut escrow_item) => {
                 require!(escrow_item.status == Status::Active, "this escrow isn't active");
                 let authoriz_cond = (self.owner_id == env::predecessor_account_id())
-                    || (escrow_item.funder_id == env::predecessor_account_id());
+                    || (escrow_item.funder_account_id == env::predecessor_account_id());
                 require!(
                     authoriz_cond,
                     "only funder or owner of this escrow may call this method"
@@ -183,12 +183,12 @@ impl Escrow {
                 require!(calc_cond, format!("current_amount ({}) must be equal to or greater than the sum of the amounts to be released ({});", escrow_item.current_amount, amounts_sum));
 
                 //send funds to the beneficiary
-                let p1 = Promise::new(escrow_item.beneficiary_id.clone()).transfer(amount_for_beneficiary);
+                let p1 = Promise::new(escrow_item.beneficiary_account_id.clone()).transfer(amount_for_beneficiary);
                 escrow_item.current_amount -= amount_for_beneficiary;
                 log!(
                     "releasing '{}' to beneficiary '{}'; escrow_id '{}'",
                     amount_for_beneficiary,
-                    escrow_item.beneficiary_id,
+                    escrow_item.beneficiary_account_id,
                     escrow_id
                 );
 
@@ -198,8 +198,9 @@ impl Escrow {
                 //FIXME verify that _p1 has returned successfully
                 escrow_item.current_amount -= amount_for_owner;
                 log!(
-                    "sending commission of '{}' to owner_id '{}'; escrow_id '{}'",
+                    "sending commission of '{}' ({}%) to owner_id '{}'; escrow_id '{}'",
                     amount_for_owner,
+                    escrow_item.current_fee_percentage,
                     self.owner_id,
                     escrow_id
                 );
@@ -223,7 +224,7 @@ impl Escrow {
                 require!(escrow_item.status == Status::Active, "this escrow isn't active");
 
                 let cond = (self.owner_id == env::predecessor_account_id())
-                    || (escrow_item.beneficiary_id == env::predecessor_account_id());
+                    || (escrow_item.beneficiary_account_id == env::predecessor_account_id());
                 require!(cond, "only beneficiary or owner may call this method");
 
                 //verify that there'll be enough of the funds
@@ -236,7 +237,7 @@ impl Escrow {
                     )
                 );
 
-                let _p1 = Promise::new(escrow_item.funder_id.clone()).transfer(escrow_item.agreed_amount);
+                let _p1 = Promise::new(escrow_item.funder_account_id.clone()).transfer(escrow_item.agreed_amount);
                 //FIXME verify that _p1 has returned successfully
                 escrow_item.status = Status::Reimbursed;
                 escrow_item.current_amount = 0;

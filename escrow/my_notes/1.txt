@@ -1,0 +1,4 @@
+near deploy --wasmFile target/wasm32-unknown-unknown/release/antioquia_escrow.wasm --accountId escrow.antioquia.testnet
+
+near call escrow.antioquia.testnet get_base_fee_percentage --accountId escrow.antioquia.testnet
+near view escrow.antioquia.testnet get_base_fee_percentage --accountId escrow.antioquia.testnet
