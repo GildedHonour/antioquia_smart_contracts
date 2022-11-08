@@ -12,6 +12,9 @@ pub enum Status {
     Reimbursed,
 }
 
+//TODO add a separate status for 'EscrowFundsStatus'
+//
+
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct EscrowItem {
     pub escrow_id: EscrowId,
@@ -19,8 +22,9 @@ pub struct EscrowItem {
     pub funder_account_id: AccountId,
     pub beneficiary_account_id: AccountId,
     pub agreed_amount: Balance,
-    pub current_fee_percentage: u128,
     pub current_amount: Balance,
+    pub current_fee_percentage: u128,
+
     // pub inserted_at: u64,
     // pub funded_at: u64,
     // pub finished_at: u64,
@@ -142,7 +146,7 @@ impl Escrow {
             self.items.insert(&escrow_id.clone(), &new_item);
             Some(escrow_id)
         } else {
-            log!("escrow_id '{}' already exists; generate a new escrow_id", escrow_id);
+            log!("escrow_id '{}' already exists; generate a new one", escrow_id);
             None
         }
     }

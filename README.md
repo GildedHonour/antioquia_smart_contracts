@@ -9,7 +9,10 @@ testnet: **escrow.antioquia.testnet**
 
 
 ## Lottery
-in progress
+....
+
+[lottery](lottery/README.md)
+
 
 ## Donations
 in progress
