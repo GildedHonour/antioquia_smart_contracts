@@ -147,7 +147,6 @@ impl Lottery {
                     )
                 );
 
-                //TODO update 'current_prize_amount'
                 lottery.current_prize_amount = attached_deposit_amount;
                 lottery.prize_status = PrizeStatus::DepositFunded;
                 lottery.status = Status::New;
@@ -160,8 +159,33 @@ impl Lottery {
         }
     }
 
-    pub fn add_participant(&self, participant_account_id: AccountId) -> AccountId {
-        todo!()
+    pub fn add_participant(&self,
+        lottery_id: LotteryId,
+        participant_account_id: AccountId
+    ) -> Option<AccountId> {
+        match self.items.get(&lottery_id) {
+            Some(mut lottery) => {
+                if lottery.participants.contains_key(&participant_account_id) {
+                    log!("participant with account_id '{}' already exists", participant_account_id);
+                    None
+                } else {
+                    let new_pt = Participant{
+                        status: ParticipantStatus::Active
+                    };
+
+                    lottery.participants.insert(
+                        &participant_account_id,
+                        &new_pt,
+                    );
+
+                    Some(participant_account_id)
+                }
+            },
+            None => {
+                log!("lottery with id '{}' doesn't exist", lottery_id);
+                None
+            }
+        }
     }
 
     //TODO
