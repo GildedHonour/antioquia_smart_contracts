@@ -7,8 +7,16 @@ type LotteryId = String;
 #[derive(BorshDeserialize, BorshSerialize, PartialEq, Debug)]
 pub enum Status {
     Draft,
-    New,
     Canceled,
+    New,
+    // NOTE
+    // when and if a need to open and close
+    // registration at certain time arises,
+    // uncomment this:
+    //
+    // RegistrationOpen,
+    // RegistrationClosed,
+    //
     Active,
     Over,
     Closed
@@ -17,11 +25,17 @@ pub enum Status {
 #[derive(BorshDeserialize, BorshSerialize, PartialEq, Debug)]
 pub enum PrizeStatus {
     DepositPending,
-    PartiallyFunded,
-    Funded,
+    DepositPartiallyFunded,
+    DepositFunded,
     WinnerPayedOff,
     OwnerReimbursed,
     PartiallyPayedOffAndReimbursed,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, PartialEq, Debug)]
+pub enum ParticipantStatus {
+    Active,
+    Suspended
 }
 
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
@@ -29,26 +43,26 @@ pub struct LotteryItem {
     pub lottery_id: LotteryId,
     pub status: Status,
     pub organiser_account_id: AccountId,
-    pub participants: Vector<LotteryParticipant>,
+    pub participants: TreeMap<AccountId, Participant>,
+    pub winner: Option<Participant>,
     pub agreed_prize_amount: Balance,
     pub current_prize_amount: Balance,
     pub prize_status: PrizeStatus,
     pub current_fee_percentage: u128,
-    pub winner: LotteryParticipant,
     // pub amount_paid_off: bool,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
-pub struct LotteryParticipant {
-    pub account_id: AccountId,
+pub struct Participant {
+    pub status: ParticipantStatus,
 }
 
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct Lottery {
-    pub owner_id: AccountId,
+    pub owner_account_id: AccountId,
     pub base_fee_percentage: u128,
-    pub items: TreeMap<EscrowId, LotteryItem>,
+    pub items: TreeMap<LotteryId, LotteryItem>,
 }
 
 #[near_bindgen]
@@ -58,9 +72,9 @@ impl Lottery {
     const HUNDRED_PERCENT: u128 = 100;
 
     #[init]
-    pub fn init(owner_account_id: Option<AccountId>, base_fee_percentage: Option<u128>) -> Self {
+    pub fn init(_owner_account_id: Option<AccountId>, base_fee_percentage: Option<u128>) -> Self {
         require!(!env::state_exists(), "Already initialized");
-        let owner_id = owner_id.unwrap_or(env::signer_account_id());
+        let owner_account_id = _owner_account_id.unwrap_or(env::signer_account_id());
 
         let base_fee_percentage2 = base_fee_percentage.unwrap_or(Self::MIN_FEE_PERCENTAGE);
         require!(
@@ -71,6 +85,13 @@ impl Lottery {
                 &Self::MAX_FEE_PERCENTAGE
             )
         );
+
+        let items: TreeMap<LotteryId, LotteryItem> = TreeMap::new(b"t");
+        Self {
+            owner_account_id,
+            base_fee_percentage: base_fee_percentage2,
+            items,
+        }
     }
 
     ///creates a new lottery
@@ -81,10 +102,13 @@ impl Lottery {
         agreed_prize_amount: Balance,
         current_fee_percentage: Option<u128>,
     ) -> Option<LotteryId> {
-        let cond = (self.owner_id == env::predecessor_account_id()) || (organiser_account_id == env::predecessor_account_id());
+        require!(agreed_prize_amount > 0, "agreed_prize_amount must be greater than 0");
+
+        let cond = (self.owner_account_id == env::predecessor_account_id()) || (organiser_account_id == env::predecessor_account_id());
         require!(cond, "only funder or owner of this escrow may call this method");
 
         if !self.items.contains_key(&lottery_id) {
+            let pts: TreeMap<AccountId, Participant> = TreeMap::new(b"p");
             let new_item = LotteryItem {
                 lottery_id: lottery_id.clone(),
                 agreed_prize_amount,
@@ -92,6 +116,9 @@ impl Lottery {
                 prize_status: PrizeStatus::DepositPending,
                 organiser_account_id,
                 current_fee_percentage: current_fee_percentage.unwrap_or(self.base_fee_percentage),
+                current_prize_amount: 0,
+                participants: pts,
+                winner: None
             };
 
             self.items.insert(&lottery_id.clone(), &new_item);
@@ -103,33 +130,43 @@ impl Lottery {
     }
 
     #[payable]
-    pub deposit_funds(&self, lotter_id: LotteryId) -> Balance {
-        require!(agreed_amount > 0, "agreed_amount must be greater than 0");
-
-        let actual_amount: Balance = env::attached_deposit();
+    pub fn deposit_funds(&mut self, lottery_id: LotteryId) -> Balance {
+        let attached_deposit_amount: Balance = env::attached_deposit();
         require!(
-            actual_amount > 0,
-            format!("expected deposit: {}; actual one: {}", agreed_amount, actual_amount)
-        );
-        require!(
-            agreed_amount == actual_amount,
-            format!(
-                "agreed_amount and actual_amount must be equal: {} and {}",
-                agreed_amount, actual_amount
-            )
+            attached_deposit_amount > 0,
+            format!("attached_deposit_amount must be greater than 0")
         );
 
-        if self.items.contains_key(&lottery_id) {
-            //TODO update 'current_prize_amount'
-        } else {
-            log!("lottery_id '{}' doens't exists");
-            0
+        match self.items.get(&lottery_id) {
+            Some(mut lottery) => {
+                require!(
+                    lottery.agreed_prize_amount == attached_deposit_amount,
+                    format!(
+                        "agreed_prize_amount and attached_deposit_amount must be equal: {} and {}",
+                        lottery.agreed_prize_amount, attached_deposit_amount
+                    )
+                );
+
+                //TODO update 'current_prize_amount'
+                lottery.current_prize_amount = attached_deposit_amount;
+                lottery.prize_status = PrizeStatus::DepositFunded;
+                lottery.status = Status::New;
+                attached_deposit_amount
+            },
+            None => {
+                log!("lottery with id '{}' doens't exists", lottery_id);
+                0
+            }
         }
     }
 
-    //TODO
-    pub fn pick_random_winner(&self, lotter_id: LotteryId) -> AccountId {
+    pub fn add_participant(&self, participant_account_id: AccountId) -> AccountId {
+        todo!()
+    }
 
+    //TODO
+    pub fn pick_random_winner(&self, lottery_id: LotteryId) -> AccountId {
+        todo!()
     }
 
     // Generate random u8 number (0-254)
@@ -141,11 +178,11 @@ impl Lottery {
     fn random_in_range(&self, index: usize, max: usize) -> u32 {
         let rand_divider = 256 as f64 / (max + 1) as f64;
         let result = self.random_u8(index) as f64 / rand_divider;
-        return result as u32;
+        result as u32
     }
 
     //TODO
-    fn get_info(&self, lotter_id: LotteryId) {
+    fn get_info(&self, lottery_id: LotteryId) {
         //lottery_id:
         //organiser_account_id:
         //status
@@ -156,6 +193,10 @@ impl Lottery {
     }
 
     //TODO
-    fn is_participant_in(&self, participant_account_id: AccountId) {
+    fn get_participant(&self,
+        lottery_id: LotteryId,
+        participant_account_id: AccountId
+    ) -> bool {
+        false
     }
 }
