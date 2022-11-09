@@ -182,21 +182,59 @@ impl Lottery {
     }
 
     //TODO
-    fn get_info(&self, lottery_id: LotteryId) {
-        //lottery_id:
-        //organiser_account_id:
-        //status
-        //participants_count:
-        //prize:
-        //prize_status
-        //fees percentage
+    fn get_lottery(&self, lottery_id: LotteryId) -> TreeMap<String, String> {
+        let mut tree: TreeMap<String, String> = TreeMap::new(b"i");
+        match self.items.get(&lottery_id) {
+            Some(lottery) => {
+                tree.insert(
+                    &String::from("lottery_id"), 
+                    &String::from(lottery_id.clone())
+                );
+
+                tree.insert(
+                    &String::from("organiser_account_id"), 
+                    &String::from(lottery_id)
+                );
+
+                tree.insert(
+                    &String::from("status"), 
+                    &String::from(format!("{:?}", lottery.status))
+                );
+
+                tree.insert(
+                    &String::from("agreed_prize_amount"), 
+                    &String::from(lottery.agreed_prize_amount.to_string())
+                );
+
+                tree.insert(
+                    &String::from("fee_percentage"), 
+                    &String::from(lottery.current_fee_percentage.to_string())
+                );
+
+                //status
+                //participants_count:
+                //prize:
+                //prize_status
+                //fees percentage
+
+                tree
+            },
+            None => {
+                log!("lottery with id '{}' doens't exists", lottery_id);
+                tree
+            }
+        }
     }
 
     //TODO
     fn get_participant(&self,
         lottery_id: LotteryId,
-        participant_account_id: AccountId
-    ) -> bool {
-        false
+        account_id: AccountId
+    ) -> Option<Participant> {
+      None
+    }
+
+    fn get_winner(&self, lottery_id: LotteryId) -> Option<Participant> {
+        None
     }
 }
