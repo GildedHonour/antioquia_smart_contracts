@@ -154,7 +154,7 @@ impl Lottery {
                 attached_deposit_amount
             },
             None => {
-                log!("lottery with id '{}' doens't exists", lottery_id);
+                log!("lottery with id '{}' doesn't exist", lottery_id);
                 0
             }
         }
@@ -181,7 +181,6 @@ impl Lottery {
         result as u32
     }
 
-    //TODO
     fn get_lottery(&self, lottery_id: LotteryId) -> TreeMap<String, String> {
         let mut tree: TreeMap<String, String> = TreeMap::new(b"i");
         match self.items.get(&lottery_id) {
@@ -207,20 +206,24 @@ impl Lottery {
                 );
 
                 tree.insert(
+                    &String::from("prize_status"), 
+                    &String::from(format!("{:?}", lottery.prize_status))
+                );
+
+                tree.insert(
                     &String::from("fee_percentage"), 
                     &String::from(lottery.current_fee_percentage.to_string())
                 );
 
-                //status
-                //participants_count:
-                //prize:
-                //prize_status
-                //fees percentage
+                tree.insert(
+                    &String::from("participants_count"), 
+                    &String::from(format!("{:?}", lottery.participants.len()))
+                );
 
                 tree
             },
             None => {
-                log!("lottery with id '{}' doens't exists", lottery_id);
+                log!("lottery with id '{}' doesn't exist", lottery_id);
                 tree
             }
         }
