@@ -95,6 +95,7 @@ impl Lottery {
     }
 
     ///creates a new lottery
+    ///and deposits funds
     #[payable]
     pub fn new(
         &mut self,
@@ -271,4 +272,14 @@ impl Lottery {
         }
     }
 
+    /// returns the balance or prize of a LotteryItem
+    pub fn get_balance(&self, lottery_id: LotteryId) -> Option<Balance> {
+        match self.items.get(&lottery_id) {
+            Some(item) => {
+                require!(item.agreed_prize_amount == item.current_prize_amount);
+                Some(item.agreed_prize_amount)
+            }
+            None => None,
+        }
+    }
 }

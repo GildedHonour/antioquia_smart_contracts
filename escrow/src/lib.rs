@@ -48,9 +48,9 @@ impl Escrow {
     /// it has to be called only once;
     /// * `base_fee_percentage` - percentage; has to be in between MIN_FEE_PERCENTAGE and MAX_FEE_PERCENTAGE
     #[init]
-    pub fn init(owner_id: Option<AccountId>, base_fee_percentage: Option<u128>) -> Self {
+    pub fn init(_owner_id: Option<AccountId>, base_fee_percentage: Option<u128>) -> Self {
         require!(!env::state_exists(), "Already initialized");
-        let owner_id = owner_id.unwrap_or(env::signer_account_id());
+        let owner_id = _owner_id.unwrap_or(env::signer_account_id());
 
         let base_fee_percentage2 = base_fee_percentage.unwrap_or(Self::MIN_FEE_PERCENTAGE);
         require!(
@@ -61,6 +61,7 @@ impl Escrow {
                 &Self::MAX_FEE_PERCENTAGE
             )
         );
+
         let items: TreeMap<EscrowId, EscrowItem> = TreeMap::new(b"t");
         Self {
             owner_id,
@@ -293,7 +294,7 @@ impl Escrow {
         }
     }
 
-    /// returns EscrowItem by its Id
+    /// returns the balance of an EscrowItem
     pub fn get_balance(&self, escrow_id: EscrowId) -> Option<Balance> {
         match self.items.get(&escrow_id) {
             Some(item) => {
