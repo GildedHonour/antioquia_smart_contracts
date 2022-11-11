@@ -2,6 +2,7 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::TreeMap;
 use near_sdk::{env, log, near_bindgen, require, AccountId, Balance, PanicOnDefault, Promise};
 
+//TODO replace with the proper type - UUID
 type LotteryId = String;
 
 #[derive(BorshDeserialize, BorshSerialize, PartialEq, Debug)]
@@ -19,7 +20,7 @@ pub enum Status {
     //
     Active,
     Over,
-    Closed
+    Closed,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, PartialEq, Debug)]
@@ -35,7 +36,7 @@ pub enum PrizeStatus {
 #[derive(BorshDeserialize, BorshSerialize, PartialEq, Debug)]
 pub enum ParticipantStatus {
     Active,
-    Suspended
+    Suspended,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
@@ -44,7 +45,7 @@ pub struct LotteryItem {
     pub status: Status,
     pub organiser_account_id: AccountId,
     pub participants: TreeMap<AccountId, Participant>,
-    pub winner: Option<(AccountId, Participant)>,
+    pub winner: Option<AccountId>,
     pub agreed_prize_amount: Balance,
     pub current_prize_amount: Balance,
     pub prize_status: PrizeStatus,
@@ -78,7 +79,8 @@ impl Lottery {
 
         let base_fee_percentage2 = base_fee_percentage.unwrap_or(Self::MIN_FEE_PERCENTAGE);
         require!(
-            (base_fee_percentage2 >= Self::MIN_FEE_PERCENTAGE) && (base_fee_percentage2 <= Self::MAX_FEE_PERCENTAGE),
+            (base_fee_percentage2 >= Self::MIN_FEE_PERCENTAGE)
+                && (base_fee_percentage2 <= Self::MAX_FEE_PERCENTAGE),
             format!(
                 "base_fee_percentage must be between {}..{}",
                 &Self::MIN_FEE_PERCENTAGE,
@@ -104,15 +106,22 @@ impl Lottery {
         agreed_prize_amount: Balance,
         current_fee_percentage: Option<u128>,
     ) -> Option<LotteryId> {
-        require!(agreed_prize_amount > 0, "agreed_prize_amount must be greater than 0");
+        require!(
+            agreed_prize_amount > 0,
+            "agreed_prize_amount must be greater than 0"
+        );
         let attached_deposit_amount: Balance = env::attached_deposit();
         require!(
             attached_deposit_amount > 0,
             format!("attached_deposit_amount must be greater than 0")
         );
 
-        let cond = (self.owner_account_id == env::predecessor_account_id()) || (organiser_account_id == env::predecessor_account_id());
-        require!(cond, "only funder or owner of this lottery may call this method");
+        let cond = (self.owner_account_id == env::predecessor_account_id())
+            || (organiser_account_id == env::predecessor_account_id());
+        require!(
+            cond,
+            "only funder or owner of this lottery may call this method"
+        );
 
         if !self.items.contains_key(&lottery_id) {
             require!(
@@ -139,33 +148,39 @@ impl Lottery {
             self.items.insert(&lottery_id.clone(), &new_item);
             Some(lottery_id)
         } else {
-            log!("lottery_id '{}' already exists; generate a new one", lottery_id);
+            log!(
+                "lottery_id '{}' already exists; generate a new one",
+                lottery_id
+            );
             None
         }
     }
 
-    pub fn add_participant(&self,
+    pub fn add_participant(
+        &self,
         lottery_id: LotteryId,
-        participant_account_id: AccountId
+        participant_account_id: AccountId,
     ) -> Option<AccountId> {
         match self.items.get(&lottery_id) {
             Some(mut lottery) => {
                 if lottery.participants.contains_key(&participant_account_id) {
-                    log!("participant with account_id '{}' already exists", participant_account_id);
+                    log!(
+                        "participant with account_id '{}' already exists",
+                        participant_account_id
+                    );
                     None
                 } else {
-                    let new_pt = Participant{
-                        status: ParticipantStatus::Active
+                    let new_pt = Participant {
+                        status: ParticipantStatus::Active,
                     };
 
-                    lottery.participants.insert(
-                        &participant_account_id,
-                        &new_pt,
-                    );
+                    lottery
+                        .participants
+                        .insert(&participant_account_id, &new_pt);
 
                     Some(participant_account_id)
                 }
-            },
+            }
             None => {
                 log!("lottery with id '{}' doesn't exist", lottery_id);
                 None
@@ -173,17 +188,36 @@ impl Lottery {
         }
     }
 
-    //TODO
-    pub fn pick_random_winner(&self, lottery_id: LotteryId) -> AccountId {
-        todo!()
+    //TODO: can be improved
+    pub fn pick_random_winner(&self, lottery_id: LotteryId) -> Option<AccountId> {
+        const MIDDLE: usize = 16;
+
+        match self.items.get(&lottery_id) {
+            Some(mut lottery) => {
+                let account_ids: Vec<AccountId> =
+                    lottery.participants.iter().map(|(k, v)| k).collect();
+
+                let rnd1 = self.random_in_range(MIDDLE, account_ids.len());
+                let rnd_account_id = account_ids.get(rnd1 as usize).unwrap();
+
+                lottery.winner = Some(rnd_account_id.clone());
+                log!("lottery_id: {}, the winner has been chosen: {}", lottery_id, rnd_account_id);
+
+                Some(rnd_account_id.clone())
+            }
+            None => {
+                log!("lottery with id '{}' doesn't exist", lottery_id);
+                None
+            }
+        }
     }
 
-    // Generate random u8 number (0-254)
+    // returns random u8 number (0-254)
     fn random_u8(&self, index: usize) -> u8 {
         *env::random_seed().get(index).unwrap()
     }
 
-    // Get random number from 0 to max
+    // returns random number from 0 to max
     fn random_in_range(&self, index: usize, max: usize) -> u32 {
         let rand_divider = 256 as f64 / (max + 1) as f64;
         let result = self.random_u8(index) as f64 / rand_divider;
@@ -195,50 +229,47 @@ impl Lottery {
         match self.items.get(&lottery_id) {
             Some(lottery) => {
                 tree.insert(
-                    &String::from("lottery_id"), 
-                    &String::from(lottery_id.clone())
+                    &String::from("lottery_id"),
+                    &String::from(lottery_id.clone()),
                 );
 
                 tree.insert(
-                    &String::from("organiser_account_id"), 
-                    &String::from(lottery_id)
+                    &String::from("organiser_account_id"),
+                    &String::from(lottery_id),
                 );
 
                 tree.insert(
-                    &String::from("status"), 
-                    &String::from(format!("{:?}", lottery.status))
+                    &String::from("status"),
+                    &String::from(format!("{:?}", lottery.status)),
                 );
 
                 tree.insert(
-                    &String::from("agreed_prize_amount"), 
-                    &String::from(lottery.agreed_prize_amount.to_string())
+                    &String::from("agreed_prize_amount"),
+                    &String::from(lottery.agreed_prize_amount.to_string()),
                 );
 
                 tree.insert(
-                    &String::from("prize_status"), 
-                    &String::from(format!("{:?}", lottery.prize_status))
+                    &String::from("prize_status"),
+                    &String::from(format!("{:?}", lottery.prize_status)),
                 );
 
                 if lottery.winner.is_some() {
-                    let (wn_acc_id, _) = lottery.winner.unwrap();
-                    tree.insert(
-                        &String::from("winner_account_id"), 
-                        &String::from(wn_acc_id)
-                    );
+                    let acc_id = lottery.winner.unwrap();
+                    tree.insert(&String::from("winner_account_id"), &String::from(acc_id));
                 }
 
                 tree.insert(
-                    &String::from("fee_percentage"), 
-                    &String::from(lottery.current_fee_percentage.to_string())
+                    &String::from("fee_percentage"),
+                    &String::from(lottery.current_fee_percentage.to_string()),
                 );
 
                 tree.insert(
-                    &String::from("participants_count"), 
-                    &String::from(format!("{:?}", lottery.participants.len()))
+                    &String::from("participants_count"),
+                    &String::from(format!("{:?}", lottery.participants.len())),
                 );
 
                 tree
-            },
+            }
             None => {
                 log!("lottery with id '{}' doesn't exist", lottery_id);
                 tree
@@ -247,17 +278,23 @@ impl Lottery {
     }
 
     //TODO
-    fn get_participant(&self,
+    fn get_participant(
+        &self,
         lottery_id: LotteryId,
-        participant_account_id: AccountId
+        participant_account_id: AccountId,
     ) -> Option<Participant> {
-      None
-    }
-
-    fn get_winner(&self, lottery_id: LotteryId) -> Option<Participant> {
         None
     }
 
+    fn get_winner(&self, lottery_id: LotteryId) -> Option<AccountId> {
+        match self.items.get(&lottery_id) {
+            Some(lottery) => lottery.winner,
+            None => {
+                log!("lottery with id '{}' doesn't exist", lottery_id);
+                None
+            }
+        }
+    }
 
     //TODO
     pub fn release_prize_to_winner(&mut self, lottery_id: LotteryId) {

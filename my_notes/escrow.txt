@@ -1,5 +1,0 @@
-
-/// returns EscrowItem by its Id
-pub fn get_item(&self, escrow_id: EscrowId) -> Option<EscrowItem> {
-    self.items.get(&escrow_id)
-}
