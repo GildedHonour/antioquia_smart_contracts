@@ -26,11 +26,10 @@ pub enum Status {
 #[derive(BorshDeserialize, BorshSerialize, PartialEq, Debug)]
 pub enum PrizeStatus {
     DepositPending,
-    DepositPartiallyFunded,
     DepositFunded,
     WinnerPayedOff,
     OwnerReimbursed,
-    PartiallyPayedOffAndReimbursed,
+    //PartiallyPayedOffAndReimbursed,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, PartialEq, Debug)]
@@ -195,13 +194,17 @@ impl Lottery {
         match self.items.get(&lottery_id) {
             Some(mut lottery) => {
                 let account_ids: Vec<AccountId> =
-                    lottery.participants.iter().map(|(k, v)| k).collect();
+                    lottery.participants.iter().map(|(k, _v)| k).collect();
 
                 let rnd1 = self.random_in_range(MIDDLE, account_ids.len());
                 let rnd_account_id = account_ids.get(rnd1 as usize).unwrap();
 
                 lottery.winner = Some(rnd_account_id.clone());
-                log!("lottery_id: {}, the winner has been chosen: {}", lottery_id, rnd_account_id);
+                log!(
+                    "lottery_id: {}, the winner has been chosen: {}",
+                    lottery_id,
+                    rnd_account_id
+                );
 
                 Some(rnd_account_id.clone())
             }
@@ -253,10 +256,12 @@ impl Lottery {
                     &String::from(format!("{:?}", lottery.prize_status)),
                 );
 
-                if lottery.winner.is_some() {
-                    let acc_id = lottery.winner.unwrap();
-                    tree.insert(&String::from("winner_account_id"), &String::from(acc_id));
-                }
+                let winner_key = String::from("winner_account_id");
+                let winner_val = match lottery.winner {
+                    Some(acc_id) => String::from(acc_id),
+                    None => String::from("none"),
+                };
+                tree.insert(&winner_key, &winner_val);
 
                 tree.insert(
                     &String::from("fee_percentage"),
@@ -277,13 +282,18 @@ impl Lottery {
         }
     }
 
-    //TODO
     fn get_participant(
         &self,
         lottery_id: LotteryId,
         participant_account_id: AccountId,
     ) -> Option<Participant> {
-        None
+        match self.items.get(&lottery_id) {
+            Some(item) => item.participants.get(&participant_account_id),
+            None => {
+                log!("lottery with id '{}' doesn't exist", lottery_id);
+                None
+            }
+        }
     }
 
     fn get_winner(&self, lottery_id: LotteryId) -> Option<AccountId> {
@@ -296,11 +306,45 @@ impl Lottery {
         }
     }
 
-    //TODO
+    //releases the prize to the winner
     pub fn release_prize_to_winner(&mut self, lottery_id: LotteryId) {
         match self.items.get(&lottery_id) {
             Some(mut lottery_item) => {
-                //
+                let amount_for_winner = lottery_item.agreed_prize_amount / Self::HUNDRED_PERCENT
+                    * (Self::HUNDRED_PERCENT - lottery_item.current_fee_percentage);
+                let amount_for_owner = lottery_item.agreed_prize_amount - amount_for_winner;
+
+                //due to a potential rounding error,
+                //verify that there'll be enough of the funds
+                let amounts_sum = amount_for_winner + amount_for_owner;
+                let calc_cond = lottery_item.current_prize_amount >= amounts_sum;
+                require!(calc_cond, format!("current_prize_amount ({}) must be equal to or greater than the sum of the amounts to be released ({});", lottery_item.current_prize_amount, amounts_sum));
+
+                let winner_account_id = lottery_item.winner.unwrap();
+                //send funds to the winner
+                let p1 = Promise::new(winner_account_id.clone()).transfer(amount_for_winner);
+                lottery_item.current_prize_amount -= amount_for_winner;
+                log!(
+                    "releasing '{}' to winner '{}'; lottery_id '{}'",
+                    amount_for_winner,
+                    winner_account_id,
+                    lottery_id
+                );
+
+                //send the fees to the owner
+                let p2 = Promise::new(self.owner_account_id.clone()).transfer(amount_for_owner);
+                p1.then(p2);
+                //FIXME verify that _p1 has returned successfully
+                lottery_item.current_prize_amount -= amount_for_owner;
+                log!(
+                    "sending commission of '{}' ({}%) to owner_account_id '{}'; lottery_id '{}'",
+                    amount_for_owner,
+                    lottery_item.current_fee_percentage,
+                    self.owner_account_id,
+                    lottery_id
+                );
+
+                lottery_item.prize_status = PrizeStatus::WinnerPayedOff;
             }
             None => {
                 //FIXME return None or Error
