@@ -158,7 +158,7 @@ impl Lottery {
     }
 
     pub fn add_participant(
-        &self,
+        &mut self,
         lottery_id: LotteryId,
         participant_account_id: AccountId,
     ) -> Option<AccountId> {
@@ -177,6 +177,10 @@ impl Lottery {
             lottery
                 .participants
                 .insert(&participant_account_id, &new_pt);
+
+            //re-insert the current lottery item
+            //this is required in order make it update its state
+            self.items.insert(&lottery_id, &lottery);
 
             Some(participant_account_id)
         }
