@@ -52,9 +52,11 @@ pub struct LotteryItem {
 
     pub winner: Option<AccountId>,
     pub agreed_prize_amount: Balance,
+    //TODO rename to current_balance
     pub current_prize_amount: Balance,
+
     pub prize_status: PrizeStatus,
-    pub current_fee_percentage: u128,
+    pub current_fee_percent: u128,
     // pub amount_paid_off: bool,
     // pub started_at: u128
     // pub ended_at: u128
@@ -69,35 +71,35 @@ pub struct Participant {
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct Lottery {
     pub owner_account_id: AccountId,
-    pub base_fee_percentage: u128,
+    pub base_fee_percent: u128,
     pub items: TreeMap<LotteryId, LotteryItem>,
 }
 
 #[near_bindgen]
 impl Lottery {
-    const MIN_FEE_PERCENTAGE: u128 = 0;
-    const MAX_FEE_PERCENTAGE: u128 = 100;
+    const MIN_FEE_PERCENT: u128 = 0;
+    const MAX_FEE_PERCENT: u128 = 100;
     const HUNDRED_PERCENT: u128 = 100;
 
     #[init]
-    pub fn init(_owner_account_id: Option<AccountId>, base_fee_percentage: Option<u128>) -> Self {
+    pub fn init(_owner_account_id: Option<AccountId>, base_fee_percent: Option<u128>) -> Self {
         require!(!env::state_exists(), "Already initialized");
         let owner_account_id = _owner_account_id.unwrap_or(env::signer_account_id());
-        let base_fee_percentage2 = base_fee_percentage.unwrap_or(Self::MIN_FEE_PERCENTAGE);
+        let base_fee_percent2 = base_fee_percent.unwrap_or(Self::MIN_FEE_PERCENT);
         require!(
-            (base_fee_percentage2 >= Self::MIN_FEE_PERCENTAGE)
-                && (base_fee_percentage2 <= Self::MAX_FEE_PERCENTAGE),
+            (base_fee_percent2 >= Self::MIN_FEE_PERCENT)
+                && (base_fee_percent2 <= Self::MAX_FEE_PERCENT),
             format!(
-                "base_fee_percentage must be between {}..{}",
-                &Self::MIN_FEE_PERCENTAGE,
-                &Self::MAX_FEE_PERCENTAGE
+                "base_fee_percent must be between {}..{}",
+                &Self::MIN_FEE_PERCENT,
+                &Self::MAX_FEE_PERCENT
             )
         );
 
         let items: TreeMap<LotteryId, LotteryItem> = TreeMap::new(b"t");
         Self {
             owner_account_id,
-            base_fee_percentage: base_fee_percentage2,
+            base_fee_percent: base_fee_percent2,
             items,
         }
     }
@@ -110,7 +112,7 @@ impl Lottery {
         lottery_id: LotteryId,
         organiser_account_id: AccountId,
         agreed_prize_amount: Balance,
-        current_fee_percentage: Option<u128>,
+        current_fee_percent: Option<u128>,
     ) -> Option<LotteryId> {
         require!(
             agreed_prize_amount > 0,
@@ -138,8 +140,9 @@ impl Lottery {
                 )
             );
 
-            //FIXME: generate prefixes dynamically
+            //FIXME: generate prefixes dynamically for near_sdk::TreeMap
             // let pts: TreeMap<AccountId, Participant> = TreeMap::new(lottery_id.as_bytes());
+
             let pts: BTreeMap<AccountId, Participant> = BTreeMap::new();
 
             let new_item = LotteryItem {
@@ -148,7 +151,7 @@ impl Lottery {
                 status: Status::New,
                 prize_status: PrizeStatus::DepositFunded,
                 organiser_account_id,
-                current_fee_percentage: current_fee_percentage.unwrap_or(self.base_fee_percentage),
+                current_fee_percent: current_fee_percent.unwrap_or(self.base_fee_percent),
                 current_prize_amount: attached_deposit_amount,
                 participants: pts,
                 winner: None,
@@ -200,15 +203,19 @@ impl Lottery {
 
         let mut lottery = self.items.get(&lottery_id).unwrap();
         let wn = lottery.winner;
-        require!(wn.is_none(), format!("winner had already been chosen before: {}", wn.clone().unwrap()));
+        require!(
+            wn.is_none(),
+            format!(
+                "winner had already been chosen before: {}",
+                wn.clone().unwrap()
+            )
+        );
 
         let account_ids: Vec<AccountId> = lottery
             .participants
             .iter()
             .map(|(k, _)| (*k).clone())
             .collect();
-
-
 
         let rnd1 = self.random_in_range(MIDDLE, account_ids.len());
         let rnd_account_id = account_ids.get(rnd1 as usize).unwrap();
@@ -274,8 +281,8 @@ impl Lottery {
         tree.insert(&winner_key, &winner_val);
 
         tree.insert(
-            &String::from("fee_percentage"),
-            &String::from(lottery.current_fee_percentage.to_string()),
+            &String::from("fee_percent"),
+            &String::from(lottery.current_fee_percent.to_string()),
         );
 
         tree.insert(
@@ -291,22 +298,23 @@ impl Lottery {
     }
 
     //releases the prize to the winner
-    pub fn release_prize_to_winner(&mut self, lottery_id: LotteryId) {
-        let mut lottery_item = self.items.get(&lottery_id).unwrap();
-        let amount_for_winner = lottery_item.agreed_prize_amount / Self::HUNDRED_PERCENT
-            * (Self::HUNDRED_PERCENT - lottery_item.current_fee_percentage);
-        let amount_for_owner = lottery_item.agreed_prize_amount - amount_for_winner;
+    pub fn release_prize_to_winner(&mut self, lottery_id: LotteryId) -> (Balance, Balance) {
+        let mut lottery = self.items.get(&lottery_id).unwrap();
+        let amount_for_winner = lottery.agreed_prize_amount / Self::HUNDRED_PERCENT
+            * (Self::HUNDRED_PERCENT - lottery.current_fee_percent);
+        let amount_for_owner = lottery.agreed_prize_amount - amount_for_winner;
 
         //due to a potential rounding error,
         //verify that there'll be enough of the funds
         let amounts_sum = amount_for_winner + amount_for_owner;
-        let calc_cond = lottery_item.current_prize_amount >= amounts_sum;
-        require!(calc_cond, format!("current_prize_amount ({}) must be equal to or greater than the sum of the amounts to be released ({});", lottery_item.current_prize_amount, amounts_sum));
+        let calc_cond = lottery.current_prize_amount >= amounts_sum;
+        require!(calc_cond, format!("current_prize_amount ({}) must be equal to or greater than the sum of the amounts to be released ({});", lottery.current_prize_amount, amounts_sum));
 
-        let winner_account_id = lottery_item.winner.unwrap();
+        let winner_account_id = lottery.winner.as_ref().unwrap();
+
         //send funds to the winner
         let p1 = Promise::new(winner_account_id.clone()).transfer(amount_for_winner);
-        lottery_item.current_prize_amount -= amount_for_winner;
+        lottery.current_prize_amount -= amount_for_winner;
         log!(
             "releasing '{}' to winner '{}'; lottery_id '{}'",
             amount_for_winner,
@@ -318,22 +326,23 @@ impl Lottery {
         let p2 = Promise::new(self.owner_account_id.clone()).transfer(amount_for_owner);
         p1.then(p2);
         //FIXME verify that _p1 has returned successfully
-        lottery_item.current_prize_amount -= amount_for_owner;
+        lottery.current_prize_amount -= amount_for_owner;
         log!(
             "[lottery_id '{}'] sending commission of '{}' ({}%) to owner_account_id '{}'",
             lottery_id,
             amount_for_owner,
-            lottery_item.current_fee_percentage,
+            lottery.current_fee_percent,
             self.owner_account_id
         );
 
-        lottery_item.prize_status = PrizeStatus::WinnerPayedOff;
+        lottery.prize_status = PrizeStatus::WinnerPayedOff;
+        self.items.insert(&lottery_id, &lottery);
+        (amount_for_winner, amount_for_owner)
     }
 
-    /// returns the balance or prize of a LotteryItem
-    pub fn get_balance(&self, lottery_id: LotteryId) -> Balance {
+    /// returns the agreed and current balances, or prize, of a LotteryItem
+    pub fn get_balance(&self, lottery_id: LotteryId) -> (Balance, Balance) {
         let item = self.items.get(&lottery_id).unwrap();
-        require!(item.agreed_prize_amount == item.current_prize_amount);
-        item.agreed_prize_amount
+        (item.agreed_prize_amount, item.current_prize_amount)
     }
 }
