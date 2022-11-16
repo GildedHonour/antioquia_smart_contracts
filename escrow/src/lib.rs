@@ -23,7 +23,7 @@ pub struct EscrowItem {
     pub beneficiary_account_id: AccountId,
     pub agreed_amount: Balance,
     pub current_amount: Balance,
-    pub current_fee_percentage: u128,
+    pub current_fee_percent: u128,
 
     // pub inserted_at: u64,
     // pub funded_at: u64,
@@ -34,45 +34,45 @@ pub struct EscrowItem {
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct Escrow {
     pub owner_id: AccountId,
-    pub base_fee_percentage: u128,
+    pub base_fee_percent: u128,
     pub items: TreeMap<EscrowId, EscrowItem>,
 }
 
 #[near_bindgen]
 impl Escrow {
-    const MIN_FEE_PERCENTAGE: u128 = 0;
-    const MAX_FEE_PERCENTAGE: u128 = 100;
+    const MIN_FEE_PERCENT: u128 = 0;
+    const MAX_FEE_PERCENT: u128 = 100;
     const HUNDRED_PERCENT: u128 = 100;
 
     /// initialize Escrow globally;
     /// it has to be called only once;
-    /// * `base_fee_percentage` - percentage; has to be in between MIN_FEE_PERCENTAGE and MAX_FEE_PERCENTAGE
+    /// * `base_fee_percent` - percent; has to be in between MIN_FEE_PERCENT and MAX_FEE_PERCENT
     #[init]
-    pub fn init(_owner_id: Option<AccountId>, base_fee_percentage: Option<u128>) -> Self {
+    pub fn init(_owner_id: Option<AccountId>, base_fee_percent: Option<u128>) -> Self {
         require!(!env::state_exists(), "Already initialized");
         let owner_id = _owner_id.unwrap_or(env::signer_account_id());
 
-        let base_fee_percentage2 = base_fee_percentage.unwrap_or(Self::MIN_FEE_PERCENTAGE);
+        let base_fee_percent2 = base_fee_percent.unwrap_or(Self::MIN_FEE_PERCENT);
         require!(
-            (base_fee_percentage2 >= Self::MIN_FEE_PERCENTAGE) && (base_fee_percentage2 <= Self::MAX_FEE_PERCENTAGE),
+            (base_fee_percent2 >= Self::MIN_FEE_PERCENT) && (base_fee_percent2 <= Self::MAX_FEE_PERCENT),
             format!(
-                "base_fee_percentage must be between {}..{}",
-                &Self::MIN_FEE_PERCENTAGE,
-                &Self::MAX_FEE_PERCENTAGE
+                "base_fee_percent must be between {}..{}",
+                &Self::MIN_FEE_PERCENT,
+                &Self::MAX_FEE_PERCENT
             )
         );
 
         let items: TreeMap<EscrowId, EscrowItem> = TreeMap::new(b"t");
         Self {
             owner_id,
-            base_fee_percentage: base_fee_percentage2,
+            base_fee_percent: base_fee_percent2,
             items,
         }
     }
 
-    /// returns base_fee as percentage
-    pub fn get_base_fee_percentage(&self) -> Balance {
-        self.base_fee_percentage
+    /// returns base_fee as percent
+    pub fn get_base_fee_percent(&self) -> Balance {
+        self.base_fee_percent
     }
 
     /// returns the Id of the owner
@@ -80,24 +80,24 @@ impl Escrow {
         self.owner_id.clone()
     }
 
-    /// set base_fee as percentage
-    /// it has to be in between MIN_FEE_PERCENTAGE and MAX_FEE_PERCENTAGE
-    pub fn set_base_fee_percentage(&mut self, new_fee: Balance) -> Balance {
+    /// set base_fee as percent
+    /// it has to be in between MIN_FEE_PERCENT and MAX_FEE_PERCENT
+    pub fn set_base_fee_percent(&mut self, new_fee: Balance) -> Balance {
         require!(
             self.owner_id == env::predecessor_account_id(),
             "only owner may call this method"
         );
-        let cond = (new_fee >= Self::MIN_FEE_PERCENTAGE) && (new_fee <= Self::MAX_FEE_PERCENTAGE);
+        let cond = (new_fee >= Self::MIN_FEE_PERCENT) && (new_fee <= Self::MAX_FEE_PERCENT);
         require!(
             cond,
             format!(
-                "fee_percentage must to be between {} and {}",
-                Self::MIN_FEE_PERCENTAGE,
-                Self::MAX_FEE_PERCENTAGE
+                "fee_percent must to be between {} and {}",
+                Self::MIN_FEE_PERCENT,
+                Self::MAX_FEE_PERCENT
             )
         );
-        self.base_fee_percentage = new_fee;
-        self.base_fee_percentage
+        self.base_fee_percent = new_fee;
+        self.base_fee_percent
     }
 
     ///creates and activates a new escrow
@@ -109,7 +109,7 @@ impl Escrow {
         funder_account_id: AccountId,
         beneficiary_account_id: AccountId,
         agreed_amount: Balance,
-        current_fee_percentage: Option<u128>,
+        current_fee_percent: Option<u128>,
     ) -> Option<EscrowId> {
         require!(agreed_amount > 0, "agreed_amount must be greater than 0");
 
@@ -141,7 +141,7 @@ impl Escrow {
                 status: Status::Active,
                 funder_account_id,
                 beneficiary_account_id,
-                current_fee_percentage: current_fee_percentage.unwrap_or(self.base_fee_percentage),
+                current_fee_percent: current_fee_percent.unwrap_or(self.base_fee_percent),
             };
 
             self.items.insert(&escrow_id.clone(), &new_item);
@@ -178,7 +178,7 @@ impl Escrow {
                 );
 
                 let amount_for_beneficiary = escrow_item.agreed_amount / Self::HUNDRED_PERCENT
-                    * (Self::HUNDRED_PERCENT - escrow_item.current_fee_percentage);
+                    * (Self::HUNDRED_PERCENT - escrow_item.current_fee_percent);
                 let amount_for_owner = escrow_item.agreed_amount - amount_for_beneficiary;
 
                 //due to a potential rounding error,
@@ -205,7 +205,7 @@ impl Escrow {
                 log!(
                     "sending commission of '{}' ({}%) to owner_id '{}'; escrow_id '{}'",
                     amount_for_owner,
-                    escrow_item.current_fee_percentage,
+                    escrow_item.current_fee_percent,
                     self.owner_id,
                     escrow_id
                 );
