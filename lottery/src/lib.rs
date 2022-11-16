@@ -1,6 +1,7 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::TreeMap;
 use near_sdk::{env, log, near_bindgen, require, AccountId, Balance, PanicOnDefault, Promise};
+use std::collections::BTreeMap;
 
 //TODO replace with the proper type - UUID
 type LotteryId = String;
@@ -44,7 +45,11 @@ pub struct LotteryItem {
     pub lottery_id: LotteryId,
     pub status: Status,
     pub organiser_account_id: AccountId,
-    pub participants: TreeMap<AccountId, Participant>,
+
+    // use the standard BTreeMap in order to avoid generating 'prefix'
+    // pub participants: TreeMap<AccountId, Participant>,
+    pub participants: BTreeMap<AccountId, Participant>,
+
     pub winner: Option<AccountId>,
     pub agreed_prize_amount: Balance,
     pub current_prize_amount: Balance,
@@ -133,7 +138,10 @@ impl Lottery {
                 )
             );
 
-            let pts: TreeMap<AccountId, Participant> = TreeMap::new(b"p");
+            //FIXME: generate prefixes dynamically
+            // let pts: TreeMap<AccountId, Participant> = TreeMap::new(lottery_id.as_bytes());
+            let pts: BTreeMap<AccountId, Participant> = BTreeMap::new();
+
             let new_item = LotteryItem {
                 lottery_id: lottery_id.clone(),
                 agreed_prize_amount,
@@ -176,25 +184,32 @@ impl Lottery {
 
             lottery
                 .participants
-                .insert(&participant_account_id, &new_pt);
+                .insert(participant_account_id.clone(), new_pt);
 
             //re-insert the current lottery item
-            //this is required in order make it update its state
+            //this is required in order make the collection update itself
             self.items.insert(&lottery_id, &lottery);
 
-            Some(participant_account_id)
+            Some(participant_account_id.clone())
         }
     }
 
     //TODO: can be improved
-    pub fn pick_random_winner(&self, lottery_id: LotteryId) -> AccountId {
+    pub fn pick_random_winner(&mut self, lottery_id: LotteryId) -> AccountId {
         const MIDDLE: usize = 16;
 
         let mut lottery = self.items.get(&lottery_id).unwrap();
         let wn = lottery.winner;
         require!(wn.is_none(), format!("winner had already been chosen before: {}", wn.clone().unwrap()));
 
-        let account_ids: Vec<AccountId> = lottery.participants.iter().map(|(k, _v)| k).collect();
+        let account_ids: Vec<AccountId> = lottery
+            .participants
+            .iter()
+            .map(|(k, _)| (*k).clone())
+            .collect();
+
+
+
         let rnd1 = self.random_in_range(MIDDLE, account_ids.len());
         let rnd_account_id = account_ids.get(rnd1 as usize).unwrap();
         lottery.winner = Some(rnd_account_id.clone());
@@ -205,6 +220,9 @@ impl Lottery {
             rnd_account_id
         );
 
+        //re-insert the current lottery item
+        //this is required in order make the collection update itself
+        self.items.insert(&lottery_id, &lottery);
         rnd_account_id.clone()
     }
 
@@ -268,19 +286,7 @@ impl Lottery {
         tree
     }
 
-    fn get_participant(
-        &self,
-        lottery_id: LotteryId,
-        participant_account_id: AccountId,
-    ) -> Option<Participant> {
-        self.items
-            .get(&lottery_id)
-            .unwrap()
-            .participants
-            .get(&participant_account_id)
-    }
-
-    fn get_winner(&self, lottery_id: LotteryId) -> Option<AccountId> {
+    pub fn get_winner(&self, lottery_id: LotteryId) -> Option<AccountId> {
         self.items.get(&lottery_id).unwrap().winner
     }
 
@@ -314,11 +320,11 @@ impl Lottery {
         //FIXME verify that _p1 has returned successfully
         lottery_item.current_prize_amount -= amount_for_owner;
         log!(
-            "sending commission of '{}' ({}%) to owner_account_id '{}'; lottery_id '{}'",
+            "[lottery_id '{}'] sending commission of '{}' ({}%) to owner_account_id '{}'",
+            lottery_id,
             amount_for_owner,
             lottery_item.current_fee_percentage,
-            self.owner_account_id,
-            lottery_id
+            self.owner_account_id
         );
 
         lottery_item.prize_status = PrizeStatus::WinnerPayedOff;
