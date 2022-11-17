@@ -33,7 +33,7 @@ pub enum PrizeStatus {
     //PartiallyPayedOffAndReimbursed,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, PartialEq, Debug)]
+#[derive(BorshDeserialize, BorshSerialize, PartialEq, Debug, Copy, Clone)]
 pub enum ParticipantStatus {
     Active,
     OptedOut,
@@ -62,7 +62,7 @@ pub struct LotteryItem {
     // pub ended_at: u128
 }
 
-#[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
+#[derive(BorshDeserialize, BorshSerialize, PanicOnDefault, Copy, Clone)]
 pub struct Participant {
     pub status: ParticipantStatus,
 }
@@ -124,12 +124,7 @@ impl Lottery {
             format!("attached_deposit_amount must be greater than 0")
         );
 
-        let cond = (self.owner_account_id == env::predecessor_account_id())
-            || (organiser_account_id == env::predecessor_account_id());
-        require!(
-            cond,
-            "only funder or owner of this lottery may call this method"
-        );
+        require!(organiser_account_id == env::predecessor_account_id(), "'organiser_account_id' argument must match the account id this method is being called from");
 
         if !self.items.contains_key(&lottery_id) {
             require!(
@@ -174,6 +169,13 @@ impl Lottery {
         participant_account_id: AccountId,
     ) -> Option<AccountId> {
         let mut lottery = self.items.get(&lottery_id).unwrap();
+        let authoriz_cond = (self.owner_account_id == env::predecessor_account_id())
+            || (lottery.organiser_account_id == env::predecessor_account_id());
+        require!(
+            authoriz_cond,
+            "only organiser or owner of this lottery may call this method"
+        );
+
         if lottery.participants.contains_key(&participant_account_id) {
             log!(
                 "participant with account_id '{}' already exists",
@@ -203,7 +205,18 @@ impl Lottery {
         participant_account_id: AccountId,
     ) {
         let mut lottery = self.items.get(&lottery_id).unwrap();
-        let mut pt = lottery.participants.get_mut(&participant_account_id).unwrap();
+
+        let authoriz_cond = (self.owner_account_id == env::predecessor_account_id())
+            || (lottery.organiser_account_id == env::predecessor_account_id());
+        require!(
+            authoriz_cond,
+            "only organiser or owner of this lottery may call this method"
+        );
+
+        let mut pt = lottery
+            .participants
+            .get_mut(&participant_account_id)
+            .unwrap();
         pt.status = ParticipantStatus::OptedOut;
 
         //re-insert the current lottery item
@@ -216,6 +229,13 @@ impl Lottery {
         const MIDDLE: usize = 16;
 
         let mut lottery = self.items.get(&lottery_id).unwrap();
+        let authoriz_cond = (self.owner_account_id == env::predecessor_account_id())
+            || (lottery.organiser_account_id == env::predecessor_account_id());
+        require!(
+            authoriz_cond,
+            "only organiser or owner of this lottery may call this method"
+        );
+
         let wn = lottery.winner;
         require!(
             wn.is_none(),
@@ -313,6 +333,23 @@ impl Lottery {
         tree
     }
 
+    fn get_participant(
+        &self,
+        lottery_id: LotteryId,
+        participant_account_id: AccountId,
+    ) -> Option<Participant> {
+        match self
+            .items
+            .get(&lottery_id)
+            .unwrap()
+            .participants
+            .get(&participant_account_id)
+        {
+            Some(&pt) => Some(pt),
+            None => None,
+        }
+    }
+
     pub fn get_winner(&self, lottery_id: LotteryId) -> Option<AccountId> {
         self.items.get(&lottery_id).unwrap().winner
     }
@@ -320,6 +357,13 @@ impl Lottery {
     //releases the prize to the winner
     pub fn release_prize_to_winner(&mut self, lottery_id: LotteryId) -> (Balance, Balance) {
         let mut lottery = self.items.get(&lottery_id).unwrap();
+        let authoriz_cond = (self.owner_account_id == env::predecessor_account_id())
+            || (lottery.organiser_account_id == env::predecessor_account_id());
+        require!(
+            authoriz_cond,
+            "only organiser or owner of this lottery may call this method"
+        );
+
         let amount_for_winner = lottery.agreed_prize_amount / Self::HUNDRED_PERCENT
             * (Self::HUNDRED_PERCENT - lottery.current_fee_percent);
         let amount_for_owner = lottery.agreed_prize_amount - amount_for_winner;
