@@ -33,7 +33,7 @@ pub enum PrizeStatus {
     //PartiallyPayedOffAndReimbursed,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Debug)]
+#[derive(BorshDeserialize, BorshSerialize, PartialEq, Debug)]
 pub enum ParticipantStatus {
     Active,
     OptedOut,
@@ -197,6 +197,20 @@ impl Lottery {
         }
     }
 
+    pub fn opt_out_participant(
+        &mut self,
+        lottery_id: LotteryId,
+        participant_account_id: AccountId,
+    ) {
+        let mut lottery = self.items.get(&lottery_id).unwrap();
+        let mut pt = lottery.participants.get_mut(&participant_account_id).unwrap();
+        pt.status = ParticipantStatus::OptedOut;
+
+        //re-insert the current lottery item
+        //this is required in order make the collection update itself
+        self.items.insert(&lottery_id, &lottery);
+    }
+
     //TODO: can be improved
     pub fn pick_random_winner(&mut self, lottery_id: LotteryId) -> AccountId {
         const MIDDLE: usize = 16;
@@ -214,8 +228,14 @@ impl Lottery {
         let account_ids: Vec<AccountId> = lottery
             .participants
             .iter()
+            .filter(|(_, v)| v.status == ParticipantStatus::Active)
             .map(|(k, _)| (*k).clone())
             .collect();
+
+        require!(
+            account_ids.len() > 0,
+            "the amount of active participants has to be greater than zero"
+        );
 
         let rnd1 = self.random_in_range(MIDDLE, account_ids.len());
         let rnd_account_id = account_ids.get(rnd1 as usize).unwrap();
