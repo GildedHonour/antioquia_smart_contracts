@@ -52,9 +52,7 @@ pub struct LotteryItem {
 
     pub winner: Option<AccountId>,
     pub agreed_prize_amount: Balance,
-    //TODO rename to current_balance
-    pub current_prize_amount: Balance,
-
+    pub current_balance: Balance,
     pub prize_status: PrizeStatus,
     pub current_fee_percent: u128,
     // pub amount_paid_off: bool,
@@ -124,7 +122,8 @@ impl Lottery {
             format!("attached_deposit_amount must be greater than 0")
         );
 
-        require!(organiser_account_id == env::predecessor_account_id(), "'organiser_account_id' argument must match the account id this method is being called from");
+        //TODO may not be needed
+        // require!(organiser_account_id == env::predecessor_account_id(), "'organiser_account_id' argument must match the account id this method is being called from");
 
         if !self.items.contains_key(&lottery_id) {
             require!(
@@ -139,7 +138,6 @@ impl Lottery {
             // let pts: TreeMap<AccountId, Participant> = TreeMap::new(lottery_id.as_bytes());
 
             let pts: BTreeMap<AccountId, Participant> = BTreeMap::new();
-
             let new_item = LotteryItem {
                 lottery_id: lottery_id.clone(),
                 agreed_prize_amount,
@@ -147,7 +145,7 @@ impl Lottery {
                 prize_status: PrizeStatus::DepositFunded,
                 organiser_account_id,
                 current_fee_percent: current_fee_percent.unwrap_or(self.base_fee_percent),
-                current_prize_amount: attached_deposit_amount,
+                current_balance: attached_deposit_amount,
                 participants: pts,
                 winner: None,
             };
@@ -285,32 +283,32 @@ impl Lottery {
         result as u32
     }
 
-    fn get_lottery(&self, lottery_id: LotteryId) -> TreeMap<String, String> {
-        let mut tree: TreeMap<String, String> = TreeMap::new(b"i");
+    pub fn get_lottery(&self, lottery_id: LotteryId) -> BTreeMap<String, String> {
         let lottery = self.items.get(&lottery_id).unwrap();
+        let mut tree: BTreeMap<String, String> = BTreeMap::new();
         tree.insert(
-            &String::from("lottery_id"),
-            &String::from(lottery_id.clone()),
+            String::from("lottery_id"),
+            String::from(lottery_id.clone()),
         );
 
         tree.insert(
-            &String::from("organiser_account_id"),
-            &String::from(lottery_id),
+            String::from("organiser_account_id"),
+            String::from(lottery_id),
         );
 
         tree.insert(
-            &String::from("status"),
-            &String::from(format!("{:?}", lottery.status)),
+            String::from("status"),
+            String::from(format!("{:?}", lottery.status)),
         );
 
         tree.insert(
-            &String::from("agreed_prize_amount"),
-            &String::from(lottery.agreed_prize_amount.to_string()),
+            String::from("agreed_prize_amount"),
+            String::from(lottery.agreed_prize_amount.to_string()),
         );
 
         tree.insert(
-            &String::from("prize_status"),
-            &String::from(format!("{:?}", lottery.prize_status)),
+            String::from("prize_status"),
+            String::from(format!("{:?}", lottery.prize_status)),
         );
 
         let winner_key = String::from("winner_account_id");
@@ -318,16 +316,16 @@ impl Lottery {
             Some(acc_id) => String::from(acc_id),
             None => String::from("none"),
         };
-        tree.insert(&winner_key, &winner_val);
+        tree.insert(winner_key, winner_val);
 
         tree.insert(
-            &String::from("fee_percent"),
-            &String::from(lottery.current_fee_percent.to_string()),
+            String::from("fee_percent"),
+            String::from(lottery.current_fee_percent.to_string()),
         );
 
         tree.insert(
-            &String::from("participants_count"),
-            &String::from(format!("{:?}", lottery.participants.len())),
+            String::from("participants_count"),
+            String::from(format!("{:?}", lottery.participants.len())),
         );
 
         tree
@@ -371,14 +369,14 @@ impl Lottery {
         //due to a potential rounding error,
         //verify that there'll be enough of the funds
         let amounts_sum = amount_for_winner + amount_for_owner;
-        let calc_cond = lottery.current_prize_amount >= amounts_sum;
-        require!(calc_cond, format!("current_prize_amount ({}) must be equal to or greater than the sum of the amounts to be released ({});", lottery.current_prize_amount, amounts_sum));
+        let calc_cond = lottery.current_balance >= amounts_sum;
+        require!(calc_cond, format!("current_balance ({}) must be equal to or greater than the sum of the amounts to be released ({});", lottery.current_balance, amounts_sum));
 
         let winner_account_id = lottery.winner.as_ref().unwrap();
 
         //send funds to the winner
         let p1 = Promise::new(winner_account_id.clone()).transfer(amount_for_winner);
-        lottery.current_prize_amount -= amount_for_winner;
+        lottery.current_balance -= amount_for_winner;
         log!(
             "releasing '{}' to winner '{}'; lottery_id '{}'",
             amount_for_winner,
@@ -390,7 +388,7 @@ impl Lottery {
         let p2 = Promise::new(self.owner_account_id.clone()).transfer(amount_for_owner);
         p1.then(p2);
         //FIXME verify that _p1 has returned successfully
-        lottery.current_prize_amount -= amount_for_owner;
+        lottery.current_balance -= amount_for_owner;
         log!(
             "[lottery_id '{}'] sending commission of '{}' ({}%) to owner_account_id '{}'",
             lottery_id,
@@ -400,13 +398,17 @@ impl Lottery {
         );
 
         lottery.prize_status = PrizeStatus::WinnerPayedOff;
+
+        //re-insert the current lottery item
+        //this is required in order make the collection update itself
         self.items.insert(&lottery_id, &lottery);
+
         (amount_for_winner, amount_for_owner)
     }
 
-    /// returns the agreed and current balances, or prize, of a LotteryItem
-    pub fn get_balance(&self, lottery_id: LotteryId) -> (Balance, Balance) {
+    /// returns the current balance of a LotteryItem
+    pub fn get_current_balance(&self, lottery_id: LotteryId) -> Balance {
         let item = self.items.get(&lottery_id).unwrap();
-        (item.agreed_prize_amount, item.current_prize_amount)
+        item.current_balance
     }
 }
