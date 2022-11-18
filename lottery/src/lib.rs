@@ -286,10 +286,7 @@ impl Lottery {
     pub fn get_lottery(&self, lottery_id: LotteryId) -> BTreeMap<String, String> {
         let lottery = self.items.get(&lottery_id).unwrap();
         let mut tree: BTreeMap<String, String> = BTreeMap::new();
-        tree.insert(
-            String::from("lottery_id"),
-            String::from(lottery_id.clone()),
-        );
+        tree.insert(String::from("lottery_id"), String::from(lottery_id.clone()));
 
         tree.insert(
             String::from("organiser_account_id"),
@@ -307,6 +304,11 @@ impl Lottery {
         );
 
         tree.insert(
+            String::from("status"),
+            String::from(format!("{:?}", lottery.status)),
+        );
+
+        tree.insert(
             String::from("prize_status"),
             String::from(format!("{:?}", lottery.prize_status)),
         );
@@ -314,7 +316,7 @@ impl Lottery {
         let winner_key = String::from("winner_account_id");
         let winner_val = match lottery.winner {
             Some(acc_id) => String::from(acc_id),
-            None => String::from("none"),
+            None => String::from("(null)"),
         };
         tree.insert(winner_key, winner_val);
 
@@ -324,8 +326,19 @@ impl Lottery {
         );
 
         tree.insert(
-            String::from("participants_count"),
+            String::from("total_participants"),
             String::from(format!("{:?}", lottery.participants.len())),
+        );
+
+        let ap_c = lottery
+            .participants
+            .iter()
+            .filter(|(_, v)| v.status == ParticipantStatus::Active)
+            .count();
+
+        tree.insert(
+            String::from("active_participants"),
+            String::from(format!("{:?}", ap_c)),
         );
 
         tree
