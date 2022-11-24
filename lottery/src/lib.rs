@@ -60,7 +60,7 @@ pub struct LotteryItem {
     // pub ended_at: u128
 }
 
-#[derive(BorshDeserialize, BorshSerialize, PanicOnDefault, Copy, Clone)]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, PanicOnDefault, Copy, Clone)]
 pub struct Participant {
     pub status: ParticipantStatus,
 }
