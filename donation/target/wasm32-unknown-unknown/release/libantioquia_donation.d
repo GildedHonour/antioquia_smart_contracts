@@ -1,1 +1,0 @@
-/home/alex/dev_projects/blockchain/antioquia_smart_contracts/donation/target/wasm32-unknown-unknown/release/libantioquia_donation.rlib: /home/alex/dev_projects/blockchain/antioquia_smart_contracts/donation/src/lib.rs
