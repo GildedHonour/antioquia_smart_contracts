@@ -2,9 +2,7 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::TreeMap;
 use near_sdk::{env, log, near_bindgen, require, AccountId, Balance, PanicOnDefault, Promise};
 use std::collections::BTreeMap;
-use uuid::Uuid;
 
-// type DonationId = Uuid;
 type DonationId = String;
 
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
