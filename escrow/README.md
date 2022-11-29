@@ -18,7 +18,7 @@ wherein:
 */
 ```
 
-whenever there's a need to create a new deal, call `new()` to create an escrow and attach the `agreed_amount` of coins to it
+to create a new deal, call `new()`; and attach `agreed_amount` of coins to it
 
 ```rust
 #[payable]

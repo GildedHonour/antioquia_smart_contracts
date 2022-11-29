@@ -39,7 +39,7 @@ wherein:
 
 to get information about a donation:
 ```rust
-get_donation(
+fn get_donation(
   donation_id: DonationId
 )
 ```
