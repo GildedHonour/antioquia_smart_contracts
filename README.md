@@ -2,17 +2,20 @@
 
 ## Escrow
 
-testnet: **escrow.antioquia.testnet**
+on testnet: [escrow.antioquia.testnet](https://explorer.testnet.near.org/accounts/escrow.antioquia.testnet)
 
-[escrow](escrow/README.md)
-
+[description](escrow/README.md)
 
 
 ## Lottery
-....
 
-[lottery](lottery/README.md)
+on testnet: [lottery.antioquia.testnet](https://explorer.testnet.near.org/accounts/lottery.antioquia.testnet)
+
+[description](lottery/README.md)
 
 
-## Donations
-in progress
+## Donation
+
+on testnet: [donation.antioquia.testnet](https://explorer.testnet.near.org/accounts/donation.antioquia.testnet)
+
+[description](donation/README.md)
