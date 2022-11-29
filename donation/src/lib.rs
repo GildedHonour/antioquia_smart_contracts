@@ -8,9 +8,9 @@ type DonationId = String;
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct DonationItem {
     pub donation_id: DonationId,
-    pub from_account_id: AccountId,
-    pub to_account_id: AccountId,
-    pub agreed_amount: Balance,
+    pub sender_account_id: AccountId,
+    pub receiver_account_id: AccountId,
+    pub amount: Balance,
     pub current_fee_percent: u128,
 }
 
@@ -56,28 +56,26 @@ impl Donation {
     pub fn send(
         &mut self,
         donation_id: DonationId,
-        from_account_id: AccountId,
-        to_account_id: AccountId,
-        agreed_amount: Balance,
-        current_fee_percent: Option<u128>,
+        receiver_account_id: AccountId,
+        amount: Balance,
     ) -> (Balance, Balance) {
-        require!(agreed_amount > 0, "agreed_amount must be greater than 0");
+        require!(amount > 0, "amount must be greater than 0");
 
         let donation = DonationItem {
             donation_id: donation_id.clone(),
-            from_account_id: env::predecessor_account_id(),
-            to_account_id: to_account_id.clone(),
-            agreed_amount: agreed_amount,
-            current_fee_percent: current_fee_percent.unwrap_or(self.base_fee_percent),
+            sender_account_id: env::predecessor_account_id(),
+            receiver_account_id: receiver_account_id.clone(),
+            amount: amount,
+            current_fee_percent: self.base_fee_percent,
         };
 
         self.items.insert(&donation_id.clone(), &donation);
 
-        let amount_for_receiver = donation.agreed_amount / Self::HUNDRED_PERCENT
+        let amount_for_receiver = donation.amount / Self::HUNDRED_PERCENT
             * (Self::HUNDRED_PERCENT - donation.current_fee_percent);
-        let amount_for_owner = donation.agreed_amount - amount_for_receiver;
+        let amount_for_owner = donation.amount - amount_for_receiver;
 
-        let p1 = Promise::new(to_account_id.clone()).transfer(amount_for_receiver);
+        let p1 = Promise::new(receiver_account_id.clone()).transfer(amount_for_receiver);
         let p2 = Promise::new(self.owner_account_id.clone()).transfer(amount_for_owner);
 
         (amount_for_receiver, amount_for_owner)
@@ -92,18 +90,18 @@ impl Donation {
         );
 
         tree.insert(
-            String::from("from_account_id"),
-            String::from(donation.from_account_id),
+            String::from("sender_account_id"),
+            String::from(donation.sender_account_id),
         );
 
         tree.insert(
-            String::from("to_account_id"),
-            String::from(donation.to_account_id),
+            String::from("receiver_account_id"),
+            String::from(donation.receiver_account_id),
         );
 
         tree.insert(
             String::from("amount"),
-            String::from(donation.agreed_amount.to_string()),
+            String::from(donation.amount.to_string()),
         );
 
         tree.insert(
