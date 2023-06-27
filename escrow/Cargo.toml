@@ -1,6 +1,6 @@
 [package]
 name = "antioquia_escrow"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["alex maslakoff <trabajar.duro@serendipia.email>"]
 edition = "2021"
 
@@ -9,7 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 near-sdk = "4.0.0"
-uint = { version = "0.9.3", default-features = false }
+uint = { version = "0.9.5", default-features = false }
 
 [profile.release]
 codegen-units = 1
